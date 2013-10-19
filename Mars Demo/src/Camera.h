@@ -1,7 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 
-#define k_mars_rotation_speed (20.0)
+#define k_mars_rotation_speed (20.0f)
 class Camera
 {
 public:
@@ -9,6 +9,13 @@ public:
 	~Camera(void);
 
 //Global Variables
+	enum Type {
+		normal,
+		chase
+	};
+	Camera::Type _type;
+	static void SetCameraType(Camera::Type type);
+	static Camera::Type GetCameraType();
 	static glm::mat4 GetView();
 	static bool Initialize();
 	static void TakeDownCamera();

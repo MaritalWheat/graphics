@@ -11,9 +11,6 @@ Mesh::Mesh(void) : Object()
 	this->colors[0] = darker_color;
 	this->colors[1] = lighter_color;
 	this->shader_index = 0;
-
-	BuildSphere(1.0f, 360, 180);
-	//BuildCylinder(1.0f, 1.0f, 20);
 }
 
 
@@ -37,113 +34,191 @@ inline int PreviousSlice(int i, int slices)
 }
 
 //http://www.opengl.org/wiki/Calculating_a_Surface_Normal
-void Mesh::CalculateNormals() {
-	unsigned int i;
-	for (i = 0; i < (this->vertices.size() * 3 - 2); i++) {
-		vec3 u = this->vertices[this->vertex_indices[i+1]].position - this->vertices[this->vertex_indices[i]].position;
-		vec3 v = this->vertices[this->vertex_indices[i+2]].position - this->vertices[this->vertex_indices[i]].position;
-
-		vec3 normal;
-		normal.x = (u.y *  v.z) - (u.z * v.y);
-		normal.y = (u.z * v.x) - (u.x * v.z);
-		normal.z = (u.x * v.y) - (u.y * v.x);
-		
-		normal.y *= -1;
-		this->vertices[this->vertex_indices[i]].normal = normal;
-	}
+void Mesh::CalculateSphereNormals(unsigned int columns, unsigned int rows) {
+	unsigned int r, s, i;
+        vec3 curr, right, left, up, down, down_left, down_right, up_left, up_right, normal;
+        unsigned int num_columns = columns;
+		int index = 0;
+        for(r = 0; r < rows - 1; r++) {
+			for(s = 0; s < columns; s++) {
+				//account for last column
+				if (s == columns - 1) {
+					this->vertices[index].normal = this->vertices[index - 1].normal;
+					index++;
+				} else {
+					i = index;
+					curr = this->vertices[index].position;
+					right = Mesh::GetIndexRight(i, num_columns, r, s); 
+					left = Mesh::GetIndexLeft(i, num_columns, r, s);
+					up = Mesh::GetIndexUp(i, num_columns, r, s);
+					down = Mesh::GetIndexDown(i, num_columns, r, s, rows);
+					down_left = Mesh::GetIndexDownLeft(i, num_columns, r, s, rows);
+					down_right = Mesh::GetIndexDownRight(i, num_columns, r, s, rows);
+					up_left = Mesh::GetIndexUpLeft(i, num_columns, r, s);
+					up_right = Mesh::GetIndexRightUp(i, num_columns, r, s);
+					vec3 a = cross(left - curr, left - up);
+					vec3 b = cross(up - curr, up - up_right);
+					vec3 c = cross(curr - right, curr - up_right);
+					vec3 d = cross(right - curr, right - down);
+					vec3 e = cross(down_left - down, down_left - curr);
+					vec3 f = cross(curr - left, curr - down_left);
+					normal = a + b + c + d + e + f;
+					normal.x = normal.x / 6;
+					normal.y = normal.y / 6;
+					normal.z = normal.z / 6;
+					if (dot(normal, normal) != 0) {
+							normal = glm::normalize(normal);
+					}
+					this->vertices[index].normal = normal;
+					index++;
+				}
+            }
+       }
+	   // account for zeroeth column
+	   for(r = 0; r < rows - 1; r++) {
+			for(s = 0; s < 1; s++) {
+				index = r * columns + s;
+				int cheat = r * columns + columns - 1;
+				if (s == 0) {
+					this->vertices[index].normal = this->vertices[cheat].normal;
+					index++;
+				}
+			}
+	   }
 }
 
-void Mesh::BuildCylinder(float radius, float height, unsigned int sectors)
-{
-	const float PI = atan(1.0f)*4;
-	const float PI_2 = atan(1.0f)*4/2;
 
-	//Create Vertices
-	float const S = 1.0f/(float)(sectors-1);
-	unsigned int s;
-	for(s = 0; s < sectors; s++) for(int h = -1; h < 2; h+=2) {
-		float const y = h * height;
-		float const x = cos(2*PI * s * S);
-		float const z = sin(2*PI * s * S);
-
-		vec3 vertex = vec3(x * radius, y * radius, z * radius);
-
-		vec3 normal = vec3(x, y, z);
-
-		vec3 color = vec3(1.0f, 0.4f, 0.0f);
-		
-		vec2 tex = vec2(s*S, 0.0f);
-
-		this->vertices.push_back(VertexAttributesPCNT(vertex, color, normal, tex));
+vec3 Mesh::GetIndexLeft(int index, int columns, int r, int s){
+	index = index - 1;
+	if (index - (r * columns) < 0) {
+		index = 0;
 	}
-
-	//Create Indices
-	vertex_indices.resize(2 * sectors * 6);
-	vector<unsigned int>::iterator i = vertex_indices.begin();
-	for(s = 0; s < sectors*2; s++) {
-		*i++ = s;
-		*i++ = (s+1);
-		*i++ = (s+2);
-		
-		*i++ = (s+1);
-		if(s >= sectors*2-2)
-			*i++ = 0;
-		else
-			*i++ = (s+3);
-		*i++ = (s+2);
-	}
+	return this->vertices[index].position;
 }
 
-//glitch that shows one segment messed up
-void Mesh::BuildSphere(float radius, unsigned int sectors, unsigned int rings)
-{
-	/*
-	unsigned int rings = 360;
-	unsigned int sectors = 180;
-	float radius = 1.0f;*/
-	
-	const float PI = atan(1.0f)*4;
-	const float PI_2 = atan(1.0f)*4/2;
+vec3 Mesh::GetIndexRight(int index, int columns, int r, int s){
+	index = index + 1;
+	if ((index - (r * columns) >= columns)) {
+		index = columns - 1;
+	}
+	return this->vertices[index].position;
+}
 
-	//Create Vertices
-	float const R = 1.0f/(float)(rings-1);
-	float const S = 1.0f/(float)(sectors-1);
+vec3 Mesh::GetIndexUp(int index, int columns, int r, int s){
+	index = index - columns;
+	if (r < 1) {
+		index = index + columns;
+	}
+	return this->vertices[index].position;
+}
+
+vec3 Mesh::GetIndexDown(int index, int columns, int r, int s, int rows){
+	index = index + columns;
+	if ((((index - s) / columns) > rows)) {
+		index = index - columns;
+	}
+	return this->vertices[index].position;
+}
+
+vec3 Mesh::GetIndexUpLeft(int index, int columns, int r, int s){
+	index = (index - 1) - columns;
+	if (index - (r * columns) < 0) {
+		index = 0;
+	}
+	if (r < 1) {
+		index = index + columns;
+	}
+	return this->vertices[index].position;
+}
+
+vec3 Mesh::GetIndexRightUp(int index, int columns, int r, int s){
+	index = (index + 1) - columns;
+	if ((index - (r * columns) >= columns)) {
+		index = columns - 1;
+	}
+	if (r < 1) {
+		index = index + columns;
+	}
+	return this->vertices[index].position;
+}
+
+vec3 Mesh::GetIndexDownLeft(int index, int columns, int r, int s, int rows){
+	index = (index - 1) + columns;
+	if (index - (r * columns) < 0) {
+		index = index + 1;
+	}
+	if ((((index - s) / columns) > rows)) {
+		index = index - columns;
+	}
+	return this->vertices[index].position;
+}
+
+vec3 Mesh::GetIndexDownRight(int index, int columns, int r, int s, int rows){
+	index = (index + 1) + columns;
+	if ((index - (r * columns) >= columns)) {
+		index = columns - 1;
+	}
+	if ((((index - s) / columns) > rows)) {
+		index = index - columns;
+	}
+	return this->vertices[index].position;
+}
+
+void Mesh::BuildMesh(unsigned int columns, unsigned int rows)
+{
+	// Create planar mesh
 	unsigned int r, s;
-	for(r = 0; r < rings; r++) for(s = 0; s < sectors; s++) {
-		float const y = sin( -PI_2 + PI * r * R );
-		float const x = cos(2*PI * s * S) * sin( PI * r * R );
-		float const z = sin(2*PI * s * S) * sin( PI * r * R );
 
-		vec3 vertex = vec3(x * radius, y * radius, z * radius);
+	int index = 0;
+	for(r = 0; r < rows; r++) {
+		for(s = 0; s < columns; s++) {
+			float const x = s;
+			float const y = r;
+			float const z = 0;
 
-		vec3 normal = vec3(x, -y, z);
+			vec3 vertex = vec3(x, y , z);
 
-		vec3 color = vec3(1.0f, 0.4f, 0.0f);
+			vec3 normal = vec3(0, 0, -1);
+
+			vec3 color = vec3(1.0f, 0.4f, 0.0f);
 		
-		vec2 tex = vec2(s*S, r*R);
+			vec2 tex = vec2(s*S, r*R);
 
-		this->vertices.push_back(VertexAttributesPCNT(vertex, color, normal, tex));
+			this->vertices.push_back(VertexAttributesPCNT(vertex, color, normal, tex));
+		}
 	}
 
-	//Create Indices
-	vertex_indices.resize(rings * sectors * 6);
+
+	// Wind triangles
+	vertex_indices.resize(rows * columns * 6);
 	vector<unsigned int>::iterator i = vertex_indices.begin();
-	// NOTE: Isn't this off by one? Also, we may want to duplicate edge verts, or at least fake it, for "wrapping"?
-	for(r = 0; r < rings - 1; r++) for(s = 0; s < sectors - 1; s++) { 
-		*i++ = r * sectors + s;
-		*i++ = r * sectors + (s+1);
-		*i++ = (r+1) * sectors + (s+1);
-		
-		*i++ = (r+1) * sectors + s;
-		*i++ = r * sectors + s;
-		*i++ = (r+1) * sectors + (s+1);
+	//int triangle_number = 0;
+	for(r = 0; r < rows - 1; r++) {
+        for(s = 0; s < columns - 1; s++) {
+			//printf("Triangle Number: %i -- \n", triangle_number);
+            *i++ = r * columns + (s+1);
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+            *i++ = (r) * columns + (s);
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+            *i++ = (r+1) * columns + s;
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+			//printf("\n");
+            //triangle_number++;
+
+			//printf("Triangle Number: %i -- \n", triangle_number);
+            *i++ = (r+1) * columns + s;
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+            *i++ = (r+1) * columns + (s+1);
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+            *i++ = (r) * columns + (s+1);
+			//printf("	Row: %i | Column: %i | Index: %i\n", r, s, *i);
+			//printf("\n");
+			//triangle_number++;
+		}
 	}
-	*i++ = vertex_indices[0];
-	*i++ = vertex_indices[0];
-	*i++ = vertex_indices[0];
-	*i++ = vertex_indices[0];
-	*i++ = vertex_indices[0];
-	*i++ = vertex_indices[0];
+}
+
+void Mesh::BuildPrimitive(float radius, unsigned int columns, unsigned int rows) {
 }
 
 bool Mesh::Initialize(float size)
@@ -165,7 +240,7 @@ bool Mesh::Initialize(float size)
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttributesPCNT), (GLvoid *) 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttributesPCNT), (GLvoid *) (sizeof(vec3) * 2));	// Note offset - legacy of older code
 	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttributesPCNT), (GLvoid *) (sizeof(vec3) * 1));	// Same
-	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttributesPCNT), (GLvoid *) (sizeof(vec3) * 3));	// Same
+	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(VertexAttributesPCNT), (GLvoid *) (sizeof(vec3) * 3));	// Same
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
@@ -218,19 +293,20 @@ void Mesh::Draw(const ivec2 & size)
 
 
 
-void Mesh::Draw(const mat4 & projection, mat4 modelview, const ivec2 & size, const float time)
+void Mesh::Draw(const mat4 & projection, mat4 view, const ivec2 & size, const float time)
 {
 	if (this->GLReturnedError("Mesh::Draw - on entry"))
 		return;
 
 	glEnable(GL_DEPTH_TEST);
-
-	mat4 mvp = projection * modelview;
-	mat3 nm = inverse(transpose(mat3(modelview)));
+	mat4 model = glm::mat4(1.0f);
+	//model = scale(model, vec3(10, 10, 10));
+	mat4 mvp = projection * view * model;
+	mat3 nm = inverse(transpose(mat3(view)));
 
 	this->shaders[this->shader_index]->Use();
 	this->GLReturnedError("Mesh::Draw - after use");
-	this->shaders[this->shader_index]->CommonSetup(time, value_ptr(size), value_ptr(projection), value_ptr(modelview), value_ptr(mvp), value_ptr(nm));
+	this->shaders[this->shader_index]->CommonSetup(time, value_ptr(size), value_ptr(projection), value_ptr(view), value_ptr(mvp), value_ptr(nm));
 	this->GLReturnedError("Mesh::Draw - after common setup");
 	glBindVertexArray(this->vertex_array_handle);
 	glDrawElements(GL_TRIANGLES , this->vertex_indices.size(), GL_UNSIGNED_INT , &this->vertex_indices[0]);
@@ -241,7 +317,7 @@ void Mesh::Draw(const mat4 & projection, mat4 modelview, const ivec2 & size, con
 	if (this->draw_normals)
 	{
 		this->solid_color.Use();
-		this->solid_color.CommonSetup(time, value_ptr(size), value_ptr(projection), value_ptr(modelview), value_ptr(mvp), value_ptr(nm));
+		this->solid_color.CommonSetup(time, value_ptr(size), value_ptr(projection), value_ptr(view), value_ptr(mvp), value_ptr(nm));
 		glBindVertexArray(this->normal_array_handle);
 		glDrawElements(GL_LINES , this->normal_indices.size(), GL_UNSIGNED_INT , &this->normal_indices[0]);
 		glBindVertexArray(0);

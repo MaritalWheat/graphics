@@ -8,7 +8,7 @@ using namespace std;
 
 void Mars::load_file(char * filename)
 {
-	const float scalar = 0.05f;	//scalar for mars depth data
+	const float scalar = 0.025f;	//scalar for mars depth data
 	//Load file, error if cannot open
 	string line;
 	stringstream line_stream;
@@ -32,21 +32,27 @@ void Mars::load_file(char * filename)
 	}
 	
 	//Create Mesh
-	this->BuildSphere(1.0f, width, height);
+	this->BuildMesh(width, height);
+	//Wrap Into Sphere
+	this->BuildPrimitive(10.0f, width, height);
+
 
 	//Modify Mesh Vertices
+	int index = 0;
 	for(int y = 0; y < height; y++) {
 		getline(file, line);
 		line_stream.clear();
 		line_stream << line;
 		for(int x = 0; x < width; x++) {
 			line_stream >> depth;
-			depth = 1.0f - depth * scalar;
-			assert(depth >= 0.0f && depth <= 1.0f);
-			vertices[y*width + x].position *= depth;
+			depth = 1.0f + depth * scalar;
+			assert(depth >= 0.0f && depth <= 2.0f);
+			vertices[index].position *= depth;
+			index++;
 		}
 	}
-	this->CalculateNormals();
+	
+	this->CalculateSphereNormals(width, height);
 }
 
 //Load Mars from Filename
